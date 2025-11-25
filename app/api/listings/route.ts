@@ -1,17 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getSupabaseServerClient } from "@/lib/supabase/server"
+import { getSupabaseServiceClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const agentId = searchParams.get("agentId")
 
-    const supabase = await getSupabaseServerClient()
+    const supabase = await getSupabaseServiceClient()
 
-    let query = supabase
-      .from("listings")
-      .select("*, categories(name)")
-      .order("created_at", { ascending: false })
+    let query = supabase.from("listings").select("*, categories(name)").order("created_at", { ascending: false })
 
     if (agentId) {
       query = query.eq("agent_id", agentId)
@@ -19,8 +16,12 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query
 
-    if (error) throw error
+    if (error) {
+      console.error("[v0] Error fetching listings:", error)
+      throw error
+    }
 
+    console.log(`[v0] Found ${data?.length || 0} listings for agent ${agentId || "all"}`)
     return NextResponse.json({ listings: data })
   } catch (error) {
     console.error("[v0] Error fetching listings:", error)
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    const supabase = await getSupabaseServerClient()
+    const supabase = await getSupabaseServiceClient()
 
     const { data, error } = await supabase.from("listings").insert(body).select().single()
 

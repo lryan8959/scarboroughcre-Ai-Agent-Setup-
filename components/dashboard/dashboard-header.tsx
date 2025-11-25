@@ -23,7 +23,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
 
   return (
     <header className="border-b bg-background">
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div className="max-w-9xl mx-1 px-5 py-4 flex items-center justify-between">
         <CompanyLogo />
 
         <div className="flex items-center gap-4">

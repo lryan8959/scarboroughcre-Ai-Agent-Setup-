@@ -53,7 +53,7 @@ export function DashboardSidebar({ role }: SidebarProps) {
           <div className="p-6 border-b border-gray-700">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white rounded flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-[#1a2332]" />
+               <img src="https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTirZvs6mwvxX4xSRx9pPSYetcWbXdcuqs_o5hVVBk1e_BGdj6Q" width={100} height={100} alt="" />
               </div>
               <div>
                 <h1 className="font-bold text-sm">Scarborough</h1>

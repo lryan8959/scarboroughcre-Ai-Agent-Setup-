@@ -10,71 +10,16 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 ;
 function CompanyLogo({ variant = "default", className = "" }) {
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-        className: `flex items-center gap-3 ${className}`,
-        children: [
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: "w-10 h-10 bg-[#1e3a5f] rounded flex items-center justify-center",
-                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("svg", {
-                    viewBox: "0 0 24 24",
-                    fill: "none",
-                    className: "w-7 h-7",
-                    xmlns: "http://www.w3.org/2000/svg",
-                    children: [
-                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("path", {
-                            d: "M4 4L8 2L12 4L16 2L20 4V12L16 14L12 12L8 14L4 12V4Z",
-                            stroke: "white",
-                            strokeWidth: "1.5",
-                            strokeLinecap: "round",
-                            strokeLinejoin: "round",
-                            fill: "none"
-                        }, void 0, false, {
-                            fileName: "[project]/components/company-logo.tsx",
-                            lineNumber: 11,
-                            columnNumber: 11
-                        }, this),
-                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("path", {
-                            d: "M8 6V10M12 8V12M16 6V10",
-                            stroke: "white",
-                            strokeWidth: "1.5",
-                            strokeLinecap: "round",
-                            strokeLinejoin: "round"
-                        }, void 0, false, {
-                            fileName: "[project]/components/company-logo.tsx",
-                            lineNumber: 19,
-                            columnNumber: 11
-                        }, this),
-                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("path", {
-                            d: "M4 16L8 14L12 16L16 14L20 16V22",
-                            stroke: "white",
-                            strokeWidth: "1.5",
-                            strokeLinecap: "round",
-                            strokeLinejoin: "round"
-                        }, void 0, false, {
-                            fileName: "[project]/components/company-logo.tsx",
-                            lineNumber: 26,
-                            columnNumber: 11
-                        }, this)
-                    ]
-                }, void 0, true, {
-                    fileName: "[project]/components/company-logo.tsx",
-                    lineNumber: 10,
-                    columnNumber: 9
-                }, this)
-            }, void 0, false, {
-                fileName: "[project]/components/company-logo.tsx",
-                lineNumber: 9,
-                columnNumber: 7
-            }, this),
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                className: `text-xl font-bold ${variant === "white" ? "text-white" : "text-foreground"}`,
-                children: ("TURBOPACK compile-time value", "Scarborough Commercial Real Estate")
-            }, void 0, false, {
-                fileName: "[project]/components/company-logo.tsx",
-                lineNumber: 35,
-                columnNumber: 7
-            }, this)
-        ]
-    }, void 0, true, {
+        className: `block  items-center ${className}`,
+        children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+            className: `text-xl font-bold ${variant === "white" ? "text-white" : "text-foreground"}`,
+            children: ("TURBOPACK compile-time value", "Scarborough Commercial Real Estate")
+        }, void 0, false, {
+            fileName: "[project]/components/company-logo.tsx",
+            lineNumber: 10,
+            columnNumber: 7
+        }, this)
+    }, void 0, false, {
         fileName: "[project]/components/company-logo.tsx",
         lineNumber: 8,
         columnNumber: 5
@@ -168,7 +113,7 @@ function DashboardHeader({ user }) {
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("header", {
         className: "border-b bg-background",
         children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-            className: "max-w-7xl mx-auto px-6 py-4 flex items-center justify-between",
+            className: "max-w-9xl mx-1 px-5 py-4 flex items-center justify-between",
             children: [
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$company$2d$logo$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CompanyLogo"], {}, void 0, false, {
                     fileName: "[project]/components/dashboard/dashboard-header.tsx",

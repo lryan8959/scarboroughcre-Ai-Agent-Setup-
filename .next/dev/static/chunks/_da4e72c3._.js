@@ -586,9 +586,15 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$re
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trash$2d$2$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Trash2$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/trash-2.js [app-client] (ecmascript) <export default as Trash2>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/client/app-dir/link.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabase$2f$client$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/supabase/client.ts [app-client] (ecmascript)");
+(()=>{
+    const e = new Error("Cannot find module '@/app/actions/create-listing'");
+    e.code = 'MODULE_NOT_FOUND';
+    throw e;
+})();
 ;
 var _s = __turbopack_context__.k.signature();
 "use client";
+;
 ;
 ;
 ;
@@ -688,7 +694,7 @@ function CreateListingPage() {
     }
     async function loadCategories() {
         const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabase$2f$client$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["getSupabaseClient"])();
-        const { data, error } = await supabase.from("listing_categories").select("id, name").order("name");
+        const { data, error } = await supabase.from("categories").select("id, name").order("name");
         if (!error && data && data.length > 0) {
             setCategories(data);
             setSelectedCategoryId(data[0].id);
@@ -740,19 +746,30 @@ function CreateListingPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabase$2f$client$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["getSupabaseClient"])();
             const squareFootage = formData.square_footage ? Number.parseInt(formData.square_footage, 10) : null;
             const lotSize = formData.lot_size ? Number.parseFloat(formData.lot_size) : null;
             const yearBuilt = formData.year_built ? Number.parseInt(formData.year_built, 10) : null;
             const price = formData.price ? Number.parseFloat(formData.price) : null;
             console.log("[v0] Creating listing with data:", {
-                squareFootage,
-                lotSize,
-                yearBuilt,
-                price
+                agent_id: user.id,
+                category_id: formData.category_id,
+                address: formData.address,
+                city: formData.city,
+                state: formData.state,
+                zip: formData.zip_code,
+                list_price: price,
+                building_sf: squareFootage,
+                lot_acres: lotSize,
+                year_built: yearBuilt,
+                listing_type: formData.listing_type,
+                status: formData.status,
+                property_type: formData.property_type,
+                description: formData.description || null,
+                zoning: formData.zoning || null,
+                thumbnail_url: formData.thumbnail_url
             });
             // Create the listing first
-            const { data: listing, error: listingError } = await supabase.from("listings").insert({
+            const result = await createListing({
                 agent_id: user.id,
                 category_id: formData.category_id,
                 address: formData.address,
@@ -770,11 +787,11 @@ function CreateListingPage() {
                 zoning: formData.zoning || null,
                 form_data: formData.custom_fields,
                 thumbnail_url: formData.thumbnail_url
-            }).select().single();
-            if (listingError) {
-                console.error("[v0] Listing creation error:", listingError);
-                throw listingError;
+            });
+            if (result.error) {
+                throw new Error(`Database error: ${result.error}`);
             }
+            const listing = result.data;
             if (listing) {
                 let firstImageUrl = null;
                 // Upload files to Vercel Blob storage
@@ -795,7 +812,7 @@ function CreateListingPage() {
                                     firstImageUrl = url;
                                 }
                                 // Save file metadata to database
-                                const { error: fileError } = await supabase.from("listing_files").insert({
+                                const saveResult = await saveListingFile({
                                     listing_id: listing.id,
                                     file_name: file.name,
                                     file_type: file.type,
@@ -804,8 +821,8 @@ function CreateListingPage() {
                                     file_size: file.size,
                                     folder_name: folder
                                 });
-                                if (fileError) {
-                                    console.error("[v0] File save error:", fileError);
+                                if (saveResult.error) {
+                                    console.error("[v0] File save error:", saveResult.error);
                                 }
                             } else {
                                 const errorText = await uploadResponse.text();
@@ -820,16 +837,17 @@ function CreateListingPage() {
                 }
                 // Update listing with thumbnail if we have one
                 if (firstImageUrl && !formData.thumbnail_url) {
-                    await supabase.from("listings").update({
-                        thumbnail_url: firstImageUrl
-                    }).eq("id", listing.id);
+                    await updateListingThumbnail(listing.id, firstImageUrl);
                 }
             }
             alert("Listing created successfully!");
             router.push("/dashboard/agent");
         } catch (error) {
-            console.error("[v0] Error creating listing:", error);
-            alert(`Failed to create listing: ${error}`);
+            console.error("[v0] Error creating listing:", {
+                message: error instanceof Error ? error.message : "Unknown error",
+                error: error
+            });
+            alert(`Failed to create listing: ${error instanceof Error ? error.message : "Unknown error"}`);
         } finally{
             setLoading(false);
         }
@@ -853,19 +871,19 @@ function CreateListingPage() {
                                         className: "h-4 w-4 mr-2"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 259,
+                                        lineNumber: 270,
                                         columnNumber: 15
                                     }, this),
                                     "Back to Dashboard"
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                lineNumber: 258,
+                                lineNumber: 269,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                            lineNumber: 257,
+                            lineNumber: 268,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h1", {
@@ -873,7 +891,7 @@ function CreateListingPage() {
                             children: "Create New Listing"
                         }, void 0, false, {
                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                            lineNumber: 263,
+                            lineNumber: 274,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -881,18 +899,18 @@ function CreateListingPage() {
                             children: "Add a new property to your portfolio"
                         }, void 0, false, {
                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                            lineNumber: 264,
+                            lineNumber: 275,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                    lineNumber: 256,
+                    lineNumber: 267,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                lineNumber: 255,
+                lineNumber: 266,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -910,20 +928,20 @@ function CreateListingPage() {
                                                 children: "Basic Information"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 273,
+                                                lineNumber: 284,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
                                                 children: "Enter the main details about the property"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 274,
+                                                lineNumber: 285,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 272,
+                                        lineNumber: 283,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -939,7 +957,7 @@ function CreateListingPage() {
                                                                 children: "Category *"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 279,
+                                                                lineNumber: 290,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
@@ -953,12 +971,12 @@ function CreateListingPage() {
                                                                             placeholder: "Select category"
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                            lineNumber: 282,
+                                                                            lineNumber: 293,
                                                                             columnNumber: 25
                                                                         }, this)
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 281,
+                                                                        lineNumber: 292,
                                                                         columnNumber: 23
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -967,24 +985,24 @@ function CreateListingPage() {
                                                                                 children: cat.name
                                                                             }, cat.id, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 286,
+                                                                                lineNumber: 297,
                                                                                 columnNumber: 27
                                                                             }, this))
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 284,
+                                                                        lineNumber: 295,
                                                                         columnNumber: 23
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 280,
+                                                                lineNumber: 291,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 278,
+                                                        lineNumber: 289,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -993,7 +1011,7 @@ function CreateListingPage() {
                                                                 children: "Address *"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 295,
+                                                                lineNumber: 306,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1006,13 +1024,13 @@ function CreateListingPage() {
                                                                 placeholder: "Street address"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 296,
+                                                                lineNumber: 307,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 294,
+                                                        lineNumber: 305,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1021,7 +1039,7 @@ function CreateListingPage() {
                                                                 children: "City *"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 305,
+                                                                lineNumber: 316,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1034,13 +1052,13 @@ function CreateListingPage() {
                                                                 placeholder: "City"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 306,
+                                                                lineNumber: 317,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 304,
+                                                        lineNumber: 315,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1049,7 +1067,7 @@ function CreateListingPage() {
                                                                 children: "State *"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 315,
+                                                                lineNumber: 326,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1062,13 +1080,13 @@ function CreateListingPage() {
                                                                 placeholder: "State"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 316,
+                                                                lineNumber: 327,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 314,
+                                                        lineNumber: 325,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1077,7 +1095,7 @@ function CreateListingPage() {
                                                                 children: "Zip Code *"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 325,
+                                                                lineNumber: 336,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1090,13 +1108,13 @@ function CreateListingPage() {
                                                                 placeholder: "Zip code"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 326,
+                                                                lineNumber: 337,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 324,
+                                                        lineNumber: 335,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1105,7 +1123,7 @@ function CreateListingPage() {
                                                                 children: "Listing Type *"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 335,
+                                                                lineNumber: 346,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
@@ -1120,12 +1138,12 @@ function CreateListingPage() {
                                                                         className: "mt-1",
                                                                         children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                            lineNumber: 342,
+                                                                            lineNumber: 353,
                                                                             columnNumber: 25
                                                                         }, this)
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 341,
+                                                                        lineNumber: 352,
                                                                         columnNumber: 23
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -1135,7 +1153,7 @@ function CreateListingPage() {
                                                                                 children: "For Sale"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 345,
+                                                                                lineNumber: 356,
                                                                                 columnNumber: 25
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -1143,25 +1161,25 @@ function CreateListingPage() {
                                                                                 children: "For Lease"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 346,
+                                                                                lineNumber: 357,
                                                                                 columnNumber: 25
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 344,
+                                                                        lineNumber: 355,
                                                                         columnNumber: 23
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 336,
+                                                                lineNumber: 347,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 334,
+                                                        lineNumber: 345,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1170,7 +1188,7 @@ function CreateListingPage() {
                                                                 children: "Status *"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 352,
+                                                                lineNumber: 363,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
@@ -1185,12 +1203,12 @@ function CreateListingPage() {
                                                                         className: "mt-1",
                                                                         children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                            lineNumber: 359,
+                                                                            lineNumber: 370,
                                                                             columnNumber: 25
                                                                         }, this)
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 358,
+                                                                        lineNumber: 369,
                                                                         columnNumber: 23
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -1200,7 +1218,7 @@ function CreateListingPage() {
                                                                                 children: "Under Approval"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 362,
+                                                                                lineNumber: 373,
                                                                                 columnNumber: 25
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -1208,7 +1226,7 @@ function CreateListingPage() {
                                                                                 children: "Active"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 363,
+                                                                                lineNumber: 374,
                                                                                 columnNumber: 25
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -1216,25 +1234,25 @@ function CreateListingPage() {
                                                                                 children: "Closed"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 364,
+                                                                                lineNumber: 375,
                                                                                 columnNumber: 25
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 361,
+                                                                        lineNumber: 372,
                                                                         columnNumber: 23
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 353,
+                                                                lineNumber: 364,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 351,
+                                                        lineNumber: 362,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1243,7 +1261,7 @@ function CreateListingPage() {
                                                                 children: "Price ($)"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 370,
+                                                                lineNumber: 381,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1256,13 +1274,13 @@ function CreateListingPage() {
                                                                 placeholder: "0"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 371,
+                                                                lineNumber: 382,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 369,
+                                                        lineNumber: 380,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1271,7 +1289,7 @@ function CreateListingPage() {
                                                                 children: "Square Footage"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 380,
+                                                                lineNumber: 391,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1284,13 +1302,13 @@ function CreateListingPage() {
                                                                 placeholder: "0"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 381,
+                                                                lineNumber: 392,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 379,
+                                                        lineNumber: 390,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1299,7 +1317,7 @@ function CreateListingPage() {
                                                                 children: "Lot Size (acres)"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 390,
+                                                                lineNumber: 401,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1311,34 +1329,6 @@ function CreateListingPage() {
                                                                         lot_size: e.target.value
                                                                     }),
                                                                 placeholder: "0"
-                                                            }, void 0, false, {
-                                                                fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 391,
-                                                                columnNumber: 21
-                                                            }, this)
-                                                        ]
-                                                    }, void 0, true, {
-                                                        fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 389,
-                                                        columnNumber: 19
-                                                    }, this),
-                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                        children: [
-                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$label$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Label"], {
-                                                                children: "Year Built"
-                                                            }, void 0, false, {
-                                                                fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 401,
-                                                                columnNumber: 21
-                                                            }, this),
-                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
-                                                                type: "number",
-                                                                value: formData.year_built,
-                                                                onChange: (e)=>setFormData({
-                                                                        ...formData,
-                                                                        year_built: e.target.value
-                                                                    }),
-                                                                placeholder: "YYYY"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
                                                                 lineNumber: 402,
@@ -1353,10 +1343,38 @@ function CreateListingPage() {
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                                         children: [
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$label$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Label"], {
+                                                                children: "Year Built"
+                                                            }, void 0, false, {
+                                                                fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
+                                                                lineNumber: 412,
+                                                                columnNumber: 21
+                                                            }, this),
+                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
+                                                                type: "number",
+                                                                value: formData.year_built,
+                                                                onChange: (e)=>setFormData({
+                                                                        ...formData,
+                                                                        year_built: e.target.value
+                                                                    }),
+                                                                placeholder: "YYYY"
+                                                            }, void 0, false, {
+                                                                fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
+                                                                lineNumber: 413,
+                                                                columnNumber: 21
+                                                            }, this)
+                                                        ]
+                                                    }, void 0, true, {
+                                                        fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
+                                                        lineNumber: 411,
+                                                        columnNumber: 19
+                                                    }, this),
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                        children: [
+                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$label$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Label"], {
                                                                 children: "Zoning"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 411,
+                                                                lineNumber: 422,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1368,13 +1386,13 @@ function CreateListingPage() {
                                                                 placeholder: "e.g., Commercial"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 412,
+                                                                lineNumber: 423,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 410,
+                                                        lineNumber: 421,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1383,7 +1401,7 @@ function CreateListingPage() {
                                                                 children: "Property Type"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 420,
+                                                                lineNumber: 431,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1395,19 +1413,19 @@ function CreateListingPage() {
                                                                 placeholder: "e.g., Office Building"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 421,
+                                                                lineNumber: 432,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 419,
+                                                        lineNumber: 430,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 277,
+                                                lineNumber: 288,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1416,7 +1434,7 @@ function CreateListingPage() {
                                                         children: "Description"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 430,
+                                                        lineNumber: 441,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$textarea$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Textarea"], {
@@ -1430,13 +1448,13 @@ function CreateListingPage() {
                                                         className: "mt-1"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 431,
+                                                        lineNumber: 442,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 429,
+                                                lineNumber: 440,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1447,7 +1465,7 @@ function CreateListingPage() {
                                                         children: "Listing Thumbnail Image"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 441,
+                                                        lineNumber: 452,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1473,7 +1491,7 @@ function CreateListingPage() {
                                                         }
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 442,
+                                                        lineNumber: 453,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1481,25 +1499,25 @@ function CreateListingPage() {
                                                         children: "Upload a main image for this listing (appears in search results)"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 465,
+                                                        lineNumber: 476,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 440,
+                                                lineNumber: 451,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 276,
+                                        lineNumber: 287,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                lineNumber: 271,
+                                lineNumber: 282,
                                 columnNumber: 13
                             }, this),
                             categoryFields.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -1513,20 +1531,20 @@ function CreateListingPage() {
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 475,
+                                                lineNumber: 486,
                                                 columnNumber: 19
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
                                                 children: "Category-specific information"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 476,
+                                                lineNumber: 487,
                                                 columnNumber: 19
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 474,
+                                        lineNumber: 485,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -1543,13 +1561,13 @@ function CreateListingPage() {
                                                                     children: "*"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                    lineNumber: 484,
+                                                                    lineNumber: 495,
                                                                     columnNumber: 49
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                            lineNumber: 482,
+                                                            lineNumber: 493,
                                                             columnNumber: 25
                                                         }, this),
                                                         field.field_type === "textarea" ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$textarea$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Textarea"], {
@@ -1565,7 +1583,7 @@ function CreateListingPage() {
                                                             className: "mt-1"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                            lineNumber: 487,
+                                                            lineNumber: 498,
                                                             columnNumber: 27
                                                         }, this) : field.field_type === "select" && field.field_options ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
                                                             value: formData.custom_fields[field.field_name] || "",
@@ -1584,12 +1602,12 @@ function CreateListingPage() {
                                                                         placeholder: "Select..."
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 510,
+                                                                        lineNumber: 521,
                                                                         columnNumber: 31
                                                                     }, this)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                    lineNumber: 509,
+                                                                    lineNumber: 520,
                                                                     columnNumber: 29
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -1598,18 +1616,18 @@ function CreateListingPage() {
                                                                             children: option
                                                                         }, option, false, {
                                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                            lineNumber: 514,
+                                                                            lineNumber: 525,
                                                                             columnNumber: 33
                                                                         }, this))
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                    lineNumber: 512,
+                                                                    lineNumber: 523,
                                                                     columnNumber: 29
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                            lineNumber: 499,
+                                                            lineNumber: 510,
                                                             columnNumber: 27
                                                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
                                                             type: field.field_type,
@@ -1625,29 +1643,29 @@ function CreateListingPage() {
                                                             className: "mt-1"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                            lineNumber: 521,
+                                                            lineNumber: 532,
                                                             columnNumber: 27
                                                         }, this)
                                                     ]
                                                 }, field.id, true, {
                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                    lineNumber: 481,
+                                                    lineNumber: 492,
                                                     columnNumber: 23
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                            lineNumber: 479,
+                                            lineNumber: 490,
                                             columnNumber: 19
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 478,
+                                        lineNumber: 489,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                lineNumber: 473,
+                                lineNumber: 484,
                                 columnNumber: 15
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -1658,20 +1676,20 @@ function CreateListingPage() {
                                                 children: "Files & Documents"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 543,
+                                                lineNumber: 554,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
                                                 children: "Upload photos, documents, and other files organized by folder"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 544,
+                                                lineNumber: 555,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 542,
+                                        lineNumber: 553,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -1692,7 +1710,7 @@ function CreateListingPage() {
                                                         }
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 548,
+                                                        lineNumber: 559,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -1704,20 +1722,20 @@ function CreateListingPage() {
                                                                 className: "h-4 w-4 mr-2"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 560,
+                                                                lineNumber: 571,
                                                                 columnNumber: 21
                                                             }, this),
                                                             "Add Folder"
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 559,
+                                                        lineNumber: 570,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 547,
+                                                lineNumber: 558,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1735,14 +1753,14 @@ function CreateListingPage() {
                                                                                 className: "h-4 w-4 text-navy"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 570,
+                                                                                lineNumber: 581,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             folder
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 569,
+                                                                        lineNumber: 580,
                                                                         columnNumber: 25
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
@@ -1759,19 +1777,19 @@ function CreateListingPage() {
                                                                                             className: "h-4 w-4 mr-2"
                                                                                         }, void 0, false, {
                                                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                            lineNumber: 576,
+                                                                                            lineNumber: 587,
                                                                                             columnNumber: 31
                                                                                         }, this),
                                                                                         "Upload Files"
                                                                                     ]
                                                                                 }, void 0, true, {
                                                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                    lineNumber: 575,
+                                                                                    lineNumber: 586,
                                                                                     columnNumber: 29
                                                                                 }, this)
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 574,
+                                                                                lineNumber: 585,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -1781,19 +1799,19 @@ function CreateListingPage() {
                                                                                 onChange: (e)=>handleFileChange(folder, e)
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                lineNumber: 580,
+                                                                                lineNumber: 591,
                                                                                 columnNumber: 27
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 573,
+                                                                        lineNumber: 584,
                                                                         columnNumber: 25
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 568,
+                                                                lineNumber: 579,
                                                                 columnNumber: 23
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1809,7 +1827,7 @@ function CreateListingPage() {
                                                                                             className: "h-4 w-4 text-gray-500"
                                                                                         }, void 0, false, {
                                                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                            lineNumber: 593,
+                                                                                            lineNumber: 604,
                                                                                             columnNumber: 31
                                                                                         }, this),
                                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1820,7 +1838,7 @@ function CreateListingPage() {
                                                                                                     children: file.name
                                                                                                 }, void 0, false, {
                                                                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                                    lineNumber: 595,
+                                                                                                    lineNumber: 606,
                                                                                                     columnNumber: 33
                                                                                                 }, this),
                                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1831,19 +1849,19 @@ function CreateListingPage() {
                                                                                                     ]
                                                                                                 }, void 0, true, {
                                                                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                                    lineNumber: 596,
+                                                                                                    lineNumber: 607,
                                                                                                     columnNumber: 33
                                                                                                 }, this)
                                                                                             ]
                                                                                         }, void 0, true, {
                                                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                            lineNumber: 594,
+                                                                                            lineNumber: 605,
                                                                                             columnNumber: 31
                                                                                         }, this)
                                                                                     ]
                                                                                 }, void 0, true, {
                                                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                    lineNumber: 592,
+                                                                                    lineNumber: 603,
                                                                                     columnNumber: 29
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -1856,18 +1874,18 @@ function CreateListingPage() {
                                                                                         className: "h-4 w-4"
                                                                                     }, void 0, false, {
                                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                        lineNumber: 606,
+                                                                                        lineNumber: 617,
                                                                                         columnNumber: 31
                                                                                     }, this)
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                                    lineNumber: 599,
+                                                                                    lineNumber: 610,
                                                                                     columnNumber: 29
                                                                                 }, this)
                                                                             ]
                                                                         }, index, true, {
                                                                             fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                            lineNumber: 591,
+                                                                            lineNumber: 602,
                                                                             columnNumber: 27
                                                                         }, this)),
                                                                     (filesByFolder[folder] || []).length === 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1875,36 +1893,36 @@ function CreateListingPage() {
                                                                         children: "No files uploaded yet"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                        lineNumber: 611,
+                                                                        lineNumber: 622,
                                                                         columnNumber: 27
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                                lineNumber: 589,
+                                                                lineNumber: 600,
                                                                 columnNumber: 23
                                                             }, this)
                                                         ]
                                                     }, folder, true, {
                                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                        lineNumber: 567,
+                                                        lineNumber: 578,
                                                         columnNumber: 21
                                                     }, this))
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                                lineNumber: 565,
+                                                lineNumber: 576,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 546,
+                                        lineNumber: 557,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                lineNumber: 541,
+                                lineNumber: 552,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1919,7 +1937,7 @@ function CreateListingPage() {
                                         children: "Cancel"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 621,
+                                        lineNumber: 632,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -1929,35 +1947,35 @@ function CreateListingPage() {
                                         children: loading ? "Creating..." : "Create Listing"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                        lineNumber: 630,
+                                        lineNumber: 641,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                                lineNumber: 620,
+                                lineNumber: 631,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                        lineNumber: 270,
+                        lineNumber: 281,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                    lineNumber: 269,
+                    lineNumber: 280,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-                lineNumber: 268,
+                lineNumber: 279,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/dashboard/agent/create-listing/page.tsx",
-        lineNumber: 254,
+        lineNumber: 265,
         columnNumber: 5
     }, this);
 }

@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 18, "column": 0}, "map": {"version":3,"sources":["file:///Users/mac/Downloads/real-estate-app-build%20%281%29/app/dashboard/page.tsx"],"sourcesContent":["import { redirect } from \"next/navigation\"\n\nexport default function DashboardPage() {\n  // Redirect based on role - this will be handled by middleware\n  redirect(\"/dashboard/agent\")\n}\n"],"names":[],"mappings":";;;;AAAA;AAAA;;AAEe,SAAS;IACtB,8DAA8D;IAC9D,IAAA,iMAAQ,EAAC;AACX"}}]
+}

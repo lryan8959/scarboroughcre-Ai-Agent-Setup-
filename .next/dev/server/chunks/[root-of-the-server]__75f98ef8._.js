@@ -100,15 +100,19 @@ async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
         const agentId = searchParams.get("agentId");
-        const supabase = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getSupabaseServerClient"])();
-        let query = supabase.from("listings").select("*, listing_categories(name)").order("created_at", {
+        const supabase = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getSupabaseServiceClient"])();
+        let query = supabase.from("listings").select("*, categories(name)").order("created_at", {
             ascending: false
         });
         if (agentId) {
             query = query.eq("agent_id", agentId);
         }
         const { data, error } = await query;
-        if (error) throw error;
+        if (error) {
+            console.error("[v0] Error fetching listings:", error);
+            throw error;
+        }
+        console.log(`[v0] Found ${data?.length || 0} listings for agent ${agentId || "all"}`);
         return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
             listings: data
         });
@@ -124,7 +128,7 @@ async function GET(request) {
 async function POST(request) {
     try {
         const body = await request.json();
-        const supabase = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getSupabaseServerClient"])();
+        const supabase = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getSupabaseServiceClient"])();
         const { data, error } = await supabase.from("listings").insert(body).select().single();
         if (error) throw error;
         return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
