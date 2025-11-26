@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Edit, MapPin, Home, FileText, ImageIcon, Folder } from "lucide-react"
 import Link from "next/link"
 import { getListingById } from "@/app/actions/get-listing"
+import { SocialMediaPostGenerator } from "@/components/social-media-post-generator"
+import { OMMemorandumGenerator } from "@/components/om-memorandum-generator"
 
 export default function ViewListingPage() {
   const router = useRouter()
@@ -122,12 +124,16 @@ export default function ViewListingPage() {
               Back to Listings
             </Link>
           </Button>
-          <Button className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white" asChild>
-            <Link href={`/dashboard/agent/create-listing?edit=${listing.id}`}>
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Listing
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <OMMemorandumGenerator listing={listing} />
+            <SocialMediaPostGenerator listing={listing} />
+            <Button className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white" asChild>
+              <Link href={`/dashboard/agent/create-listing?edit=${listing.id}`}>
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Listing
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <Card className="overflow-hidden border-0 shadow-lg">

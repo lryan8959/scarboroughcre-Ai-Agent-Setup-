@@ -1,15 +1,9 @@
 {
   "/api/auth/login/route": "app/api/auth/login/route.js",
-  "/api/auth/register/route": "app/api/auth/register/route.js",
   "/api/listings/route": "app/api/listings/route.js",
-  "/api/upload/route": "app/api/upload/route.js",
-  "/dashboard/admin/form-fields/page": "app/dashboard/admin/form-fields/page.js",
-  "/dashboard/admin/listings/[id]/page": "app/dashboard/admin/listings/[id]/page.js",
-  "/dashboard/admin/page": "app/dashboard/admin/page.js",
   "/dashboard/agent/create-listing/page": "app/dashboard/agent/create-listing/page.js",
   "/dashboard/agent/listings/[id]/page": "app/dashboard/agent/listings/[id]/page.js",
   "/dashboard/agent/page": "app/dashboard/agent/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
   "/login/page": "app/login/page.js",
-  "/register/page": "app/register/page.js"
+  "/page": "app/page.js"
 }
