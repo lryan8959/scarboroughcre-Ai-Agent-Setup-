@@ -1307,25 +1307,62 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$jspdf$2f$dis
 ;
 ;
 ;
-const loadImageAsDataURL = (url)=>{
-    return new Promise((resolve, reject)=>{
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = ()=>{
-            const canvas = document.createElement("canvas");
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-                ctx.drawImage(img, 0, 0);
-                resolve(canvas.toDataURL("image/jpeg", 0.8));
-            } else {
-                reject(new Error("Failed to get canvas context"));
-            }
-        };
-        img.onerror = ()=>reject(new Error(`Failed to load image: ${url}`));
-        img.src = url;
-    });
+const loadImageViaFetch = async (url)=>{
+    try {
+        console.log("[v0] Fetching image via fetch API:", url);
+        // Fetch the image
+        const response = await fetch(url, {
+            mode: "cors",
+            credentials: "omit"
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        // Convert to blob
+        const blob = await response.blob();
+        // Convert blob to base64
+        return new Promise((resolve, reject)=>{
+            const reader = new FileReader();
+            reader.onloadend = ()=>{
+                const base64 = reader.result;
+                console.log("[v0] Image converted to base64 successfully:", url.substring(0, 50));
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error("[v0] Fetch method failed:", error);
+        // Fallback to canvas method
+        return new Promise((resolve, reject)=>{
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = ()=>{
+                try {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext("2d");
+                    if (ctx) {
+                        ctx.drawImage(img, 0, 0);
+                        const dataURL = canvas.toDataURL("image/jpeg", 0.85);
+                        console.log("[v0] Image loaded via canvas fallback");
+                        resolve(dataURL);
+                    } else {
+                        reject(new Error("Failed to get canvas context"));
+                    }
+                } catch (error) {
+                    console.error("[v0] Canvas conversion failed:", error);
+                    reject(error);
+                }
+            };
+            img.onerror = (error)=>{
+                console.error("[v0] Image load failed completely:", url, error);
+                reject(new Error(`Failed to load image: ${url}`));
+            };
+            img.src = url;
+        });
+    }
 };
 function OMMemorandumGenerator({ listing }) {
     const [open, setOpen] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(false);
@@ -1334,6 +1371,7 @@ function OMMemorandumGenerator({ listing }) {
         setGenerating(true);
         try {
             console.log("[v0] Starting PDF generation for listing:", listing.id);
+            console.log("[v0] Listing files:", listing.files);
             const pdf = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$jspdf$2f$dist$2f$jspdf$2e$node$2e$min$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsPDF"]({
                 orientation: "portrait",
                 unit: "pt",
@@ -1342,32 +1380,6 @@ function OMMemorandumGenerator({ listing }) {
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
             const margin = 40;
-            // PAGE 1: Cover Page
-            pdf.setFillColor(30, 41, 59);
-            pdf.rect(0, 0, pageWidth, pageHeight, "F");
-            // Company Logo at top
-            try {
-                const logoBase64 = await loadImageAsDataURL("https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTirZvs6mwvxX4xSRx9pPSYetcWbXdcuqs_o5hVVBk1e_BGdj6Q");
-                const logoWidth = 100;
-                const logoHeight = 35;
-                pdf.addImage(logoBase64, "PNG", (pageWidth - logoWidth) / 2, 40, logoWidth, logoHeight);
-            } catch (error) {
-                console.error("[v0] Failed to load logo:", error);
-            }
-            // Property Image with white border
-            if (listing.thumbnail_url) {
-                try {
-                    const propBase64 = await loadImageAsDataURL(listing.thumbnail_url);
-                    const imgWidth = pageWidth - 2 * margin;
-                    const imgHeight = 300;
-                    const imgY = 120;
-                    pdf.setFillColor(255, 255, 255);
-                    pdf.rect(margin - 5, imgY - 5, imgWidth + 10, imgHeight + 10, "F");
-                    pdf.addImage(propBase64, "JPEG", margin, imgY, imgWidth, imgHeight);
-                } catch (error) {
-                    console.error("[v0] Failed to load property image:", error);
-                }
-            }
             const drawTriangle = (x1, y1, x2, y2, x3, y3)=>{
                 pdf.lines([
                     [
@@ -1387,19 +1399,43 @@ function OMMemorandumGenerator({ listing }) {
                     1
                 ], "F");
             };
+            // PAGE 1: Cover Page
+            pdf.setFillColor(30, 41, 59);
+            pdf.rect(0, 0, pageWidth, pageHeight, "F");
+            try {
+                const logoBase64 = await loadImageViaFetch("https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTirZvs6mwvxX4xSRx9pPSYetcWbXdcuqs_o5hVVBk1e_BGdj6Q");
+                const logoWidth = 40;
+                const logoHeight = 40;
+                pdf.addImage(logoBase64, "PNG", (pageWidth - logoWidth) / 2, 40, logoWidth, logoHeight);
+            } catch (error) {
+                console.error("[v0] Failed to load logo:", error);
+            }
+            // Property Image with white border
+            if (listing.thumbnail_url) {
+                try {
+                    const propBase64 = await loadImageViaFetch(listing.thumbnail_url);
+                    const imgWidth = pageWidth - 2 * margin;
+                    const imgHeight = 300;
+                    const imgY = 120;
+                    pdf.setFillColor(255, 255, 255);
+                    pdf.rect(margin - 5, imgY - 5, imgWidth + 10, imgHeight + 10, "F");
+                    pdf.addImage(propBase64, "JPEG", margin, imgY, imgWidth, imgHeight);
+                } catch (error) {
+                    console.error("[v0] Failed to load property image:", error);
+                }
+            }
+            // Diagonal triangle design
             pdf.setFillColor(248, 250, 252);
             const triangleY = 440;
             drawTriangle(0, triangleY, pageWidth, triangleY, pageWidth, pageHeight);
-            // FOR SALE/LEASE text
-            pdf.setTextColor(30, 41, 59); // Dark text color for visibility
+            pdf.setTextColor(30, 41, 59);
             pdf.setFontSize(48);
             pdf.setFont("helvetica", "bold");
             const listingTypeText = listing.listing_type === "for_sale" ? "FOR SALE" : listing.listing_type === "for_lease" ? "FOR LEASE" : "FOR SALE OR LEASE";
             pdf.text(listingTypeText, pageWidth / 2, 500, {
                 align: "center"
             });
-            // Property details
-            pdf.setTextColor(51, 65, 85); // Darker text
+            pdf.setTextColor(51, 65, 85);
             pdf.setFontSize(16);
             pdf.setFont("helvetica", "normal");
             const detailsLine1 = `${listing.building_sf ? listing.building_sf.toLocaleString() + " SF" : ""} ${listing.categories?.name || ""}`;
@@ -1436,6 +1472,7 @@ function OMMemorandumGenerator({ listing }) {
             pdf.rect(trafficX, boxY, boxWidth, boxHeight, "F");
             pdf.setTextColor(71, 85, 105);
             pdf.setFontSize(10);
+            pdf.setFont("helvetica", "bold");
             pdf.text("TRAFFIC COUNT", trafficX + boxWidth / 2, boxY + 20, {
                 align: "center"
             });
@@ -1451,6 +1488,7 @@ function OMMemorandumGenerator({ listing }) {
             pdf.rect(priceX, boxY, boxWidth, boxHeight, "F");
             pdf.setTextColor(71, 85, 105);
             pdf.setFontSize(10);
+            pdf.setFont("helvetica", "bold");
             pdf.text("PRICING", priceX + boxWidth / 2, boxY + 20, {
                 align: "center"
             });
@@ -1589,11 +1627,12 @@ function OMMemorandumGenerator({ listing }) {
                 pdf.text(`• ${highlight}`, margin + 20, yPos);
                 yPos += 25;
             });
+            // Diagonal triangle design
             pdf.setFillColor(0, 0, 0);
             const diagY = 320;
             drawTriangle(0, diagY, pageWidth, diagY - 80, pageWidth, pageHeight);
             try {
-                const samuelBase64 = await loadImageAsDataURL("/images/samuel-scarborough.jpg");
+                const samuelBase64 = await loadImageViaFetch("/images/samuel-scarborough.jpg");
                 const samImgW = 150;
                 const samImgH = 180;
                 const samImgX = margin + 40;
@@ -1618,12 +1657,26 @@ function OMMemorandumGenerator({ listing }) {
             pdf.text("(903) 570-7366", contactX, contactY + 66);
             pdf.text("www.scarboroughcre.com", contactX, contactY + 86);
             console.log("[v0] Checking listing files:", listing.files);
+            console.log("[v0] Total files count:", listing.files?.length || 0);
             const imageFiles = (listing.files || []).filter((f)=>{
+                const hasFileUrl = f.file_url && typeof f.file_url === "string";
+                const isVercelBlob = hasFileUrl && f.file_url.includes("blob.vercel-storage.com");
                 const isImage = f.file_type?.startsWith("image/") || f.file_url?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                console.log("[v0] File:", f.file_url, "Is image:", isImage);
-                return f.file_url && isImage;
+                console.log("[v0] File check:", {
+                    name: f.file_name,
+                    url: f.file_url,
+                    type: f.file_type,
+                    hasFileUrl,
+                    isVercelBlob,
+                    isImage,
+                    include: hasFileUrl && isVercelBlob && isImage
+                });
+                return hasFileUrl && isVercelBlob && isImage;
             });
-            console.log("[v0] Found property images:", imageFiles.length);
+            console.log("[v0] Filtered property images for PDF:", imageFiles.length);
+            imageFiles.forEach((f, i)=>{
+                console.log(`[v0] Property image ${i + 1}:`, f.file_url);
+            });
             if (imageFiles.length > 0) {
                 // PAGE 4: Property Images
                 pdf.addPage();
@@ -1637,33 +1690,36 @@ function OMMemorandumGenerator({ listing }) {
                     align: "center"
                 });
                 let currentY = 120;
+                // First image full width (hero image)
                 if (imageFiles.length > 0) {
                     try {
-                        console.log("[v0] Loading first image:", imageFiles[0].file_url);
-                        const firstImgBase64 = await loadImageAsDataURL(imageFiles[0].file_url);
+                        console.log("[v0] Loading hero image:", imageFiles[0].file_url);
+                        const firstImgBase64 = await loadImageViaFetch(imageFiles[0].file_url);
                         const firstImgWidth = pageWidth - 2 * margin;
                         const firstImgHeight = 240;
                         pdf.addImage(firstImgBase64, "JPEG", margin, currentY, firstImgWidth, firstImgHeight);
-                        console.log("[v0] First image added");
+                        console.log("[v0] Hero image added successfully");
                         currentY += firstImgHeight + 25;
                     } catch (error) {
-                        console.error("[v0] Failed to load first image:", error);
+                        console.error("[v0] Failed to load hero image:", error);
                     }
                 }
+                // Remaining images in 2-column grid
                 const gridImgWidth = (pageWidth - 3 * margin) / 2;
                 const gridImgHeight = 150;
                 const imgSpacing = 20;
                 let imgX = margin;
                 let imgIndex = 1;
                 let imagesInRow = 0;
+                // Add remaining images on first page
                 while(imgIndex < imageFiles.length && currentY + gridImgHeight < pageHeight - margin){
                     try {
-                        console.log(`[v0] Loading image ${imgIndex + 1}:`, imageFiles[imgIndex].file_url);
-                        const imgBase64 = await loadImageAsDataURL(imageFiles[imgIndex].file_url);
+                        console.log(`[v0] Loading grid image ${imgIndex + 1}:`, imageFiles[imgIndex].file_url);
+                        const imgBase64 = await loadImageViaFetch(imageFiles[imgIndex].file_url);
                         pdf.addImage(imgBase64, "JPEG", imgX, currentY, gridImgWidth, gridImgHeight);
-                        console.log(`[v0] Image ${imgIndex + 1} added`);
+                        console.log(`[v0] Grid image ${imgIndex + 1} added successfully`);
                     } catch (error) {
-                        console.error(`[v0] Failed to load image ${imgIndex + 1}:`, error);
+                        console.error(`[v0] Failed to load grid image ${imgIndex + 1}:`, error);
                     }
                     imgIndex++;
                     imagesInRow++;
@@ -1675,7 +1731,7 @@ function OMMemorandumGenerator({ listing }) {
                         imgX += gridImgWidth + margin;
                     }
                 }
-                // Continue on additional pages if needed
+                // Add additional pages if needed for remaining images
                 while(imgIndex < imageFiles.length){
                     pdf.addPage();
                     pdf.setFillColor(0, 0, 0);
@@ -1685,8 +1741,10 @@ function OMMemorandumGenerator({ listing }) {
                     imagesInRow = 0;
                     while(imgIndex < imageFiles.length && currentY + gridImgHeight < pageHeight - margin){
                         try {
-                            const imgBase64 = await loadImageAsDataURL(imageFiles[imgIndex].file_url);
+                            console.log(`[v0] Loading image ${imgIndex + 1} on new page:`, imageFiles[imgIndex].file_url);
+                            const imgBase64 = await loadImageViaFetch(imageFiles[imgIndex].file_url);
                             pdf.addImage(imgBase64, "JPEG", imgX, currentY, gridImgWidth, gridImgHeight);
+                            console.log(`[v0] Image ${imgIndex + 1} added on new page`);
                         } catch (error) {
                             console.error(`[v0] Failed to load image ${imgIndex + 1}:`, error);
                         }
@@ -1701,17 +1759,18 @@ function OMMemorandumGenerator({ listing }) {
                         }
                     }
                 }
+                console.log("[v0] Property images page completed");
             } else {
-                console.log("[v0] No property images found");
+                console.log("[v0] No valid property images found in listing files");
             }
             // Save PDF
             const fileName = `OM_${listing.address.replace(/[^a-z0-9]/gi, "_")}.pdf`;
             pdf.save(fileName);
-            console.log("[v0] PDF saved:", fileName);
+            console.log("[v0] PDF saved successfully:", fileName);
             setOpen(false);
         } catch (error) {
             console.error("[v0] Error generating PDF:", error);
-            alert("Failed to generate PDF. Please try again.");
+            alert("Failed to generate PDF. Please check console for details.");
         } finally{
             setGenerating(false);
         }
@@ -1726,14 +1785,14 @@ function OMMemorandumGenerator({ listing }) {
                         className: "w-4 h-4 mr-2"
                     }, void 0, false, {
                         fileName: "[project]/components/om-memorandum-generator.tsx",
-                        lineNumber: 464,
+                        lineNumber: 535,
                         columnNumber: 9
                     }, this),
                     "Generate OM Memorandum"
                 ]
             }, void 0, true, {
                 fileName: "[project]/components/om-memorandum-generator.tsx",
-                lineNumber: 463,
+                lineNumber: 534,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -1747,12 +1806,12 @@ function OMMemorandumGenerator({ listing }) {
                                 children: "Generate Offering Memorandum"
                             }, void 0, false, {
                                 fileName: "[project]/components/om-memorandum-generator.tsx",
-                                lineNumber: 471,
+                                lineNumber: 542,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/components/om-memorandum-generator.tsx",
-                            lineNumber: 470,
+                            lineNumber: 541,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1763,7 +1822,7 @@ function OMMemorandumGenerator({ listing }) {
                                     children: "Generate a professional Offering Memorandum (OM) PDF for this listing including property details, investment highlights, and images."
                                 }, void 0, false, {
                                     fileName: "[project]/components/om-memorandum-generator.tsx",
-                                    lineNumber: 475,
+                                    lineNumber: 546,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1774,7 +1833,7 @@ function OMMemorandumGenerator({ listing }) {
                                             children: "Document will include:"
                                         }, void 0, false, {
                                             fileName: "[project]/components/om-memorandum-generator.tsx",
-                                            lineNumber: 481,
+                                            lineNumber: 552,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
@@ -1784,40 +1843,40 @@ function OMMemorandumGenerator({ listing }) {
                                                     children: "✓ Cover page with property image"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/om-memorandum-generator.tsx",
-                                                    lineNumber: 483,
+                                                    lineNumber: 554,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("li", {
                                                     children: "✓ Investment summary with key metrics"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/om-memorandum-generator.tsx",
-                                                    lineNumber: 484,
+                                                    lineNumber: 555,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("li", {
                                                     children: "✓ Investment highlights"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/om-memorandum-generator.tsx",
-                                                    lineNumber: 485,
+                                                    lineNumber: 556,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("li", {
                                                     children: "✓ Property images gallery"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/om-memorandum-generator.tsx",
-                                                    lineNumber: 486,
+                                                    lineNumber: 557,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/components/om-memorandum-generator.tsx",
-                                            lineNumber: 482,
+                                            lineNumber: 553,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/om-memorandum-generator.tsx",
-                                    lineNumber: 480,
+                                    lineNumber: 551,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1833,7 +1892,7 @@ function OMMemorandumGenerator({ listing }) {
                                                         className: "w-4 h-4 mr-2 animate-spin"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/om-memorandum-generator.tsx",
-                                                        lineNumber: 498,
+                                                        lineNumber: 569,
                                                         columnNumber: 21
                                                     }, this),
                                                     "Generating..."
@@ -1844,7 +1903,7 @@ function OMMemorandumGenerator({ listing }) {
                                                         className: "w-4 h-4 mr-2"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/om-memorandum-generator.tsx",
-                                                        lineNumber: 503,
+                                                        lineNumber: 574,
                                                         columnNumber: 21
                                                     }, this),
                                                     "Generate PDF"
@@ -1852,7 +1911,7 @@ function OMMemorandumGenerator({ listing }) {
                                             }, void 0, true)
                                         }, void 0, false, {
                                             fileName: "[project]/components/om-memorandum-generator.tsx",
-                                            lineNumber: 491,
+                                            lineNumber: 562,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -1861,30 +1920,30 @@ function OMMemorandumGenerator({ listing }) {
                                             children: "Cancel"
                                         }, void 0, false, {
                                             fileName: "[project]/components/om-memorandum-generator.tsx",
-                                            lineNumber: 508,
+                                            lineNumber: 579,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/om-memorandum-generator.tsx",
-                                    lineNumber: 490,
+                                    lineNumber: 561,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/om-memorandum-generator.tsx",
-                            lineNumber: 474,
+                            lineNumber: 545,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/om-memorandum-generator.tsx",
-                    lineNumber: 469,
+                    lineNumber: 540,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/components/om-memorandum-generator.tsx",
-                lineNumber: 468,
+                lineNumber: 539,
                 columnNumber: 7
             }, this)
         ]

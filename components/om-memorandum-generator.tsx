@@ -5,30 +5,76 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { FileText, Download, Loader2 } from "lucide-react"
 import { jsPDF } from "jspdf"
+import { getListingImagesForPDF } from "@/app/actions/get-listing-images-for-pdf"
 
 interface OMGeneratorProps {
   listing: any
 }
 
-const loadImageAsDataURL = (url: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    img.onload = () => {
-      const canvas = document.createElement("canvas")
-      canvas.width = img.width
-      canvas.height = img.height
-      const ctx = canvas.getContext("2d")
-      if (ctx) {
-        ctx.drawImage(img, 0, 0)
-        resolve(canvas.toDataURL("image/jpeg", 0.8))
-      } else {
-        reject(new Error("Failed to get canvas context"))
-      }
+const loadImageViaFetch = async (url: string): Promise<string> => {
+  try {
+    console.log("[v0] Fetching image via fetch API:", url)
+
+    // Fetch the image
+    const response = await fetch(url, {
+      mode: "cors",
+      credentials: "omit",
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
-    img.onerror = () => reject(new Error(`Failed to load image: ${url}`))
-    img.src = url
-  })
+
+    // Convert to blob
+    const blob = await response.blob()
+
+    // Convert blob to base64
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64 = reader.result as string
+        console.log("[v0] Image converted to base64 successfully:", url.substring(0, 50))
+        resolve(base64)
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  } catch (error) {
+    console.error("[v0] Fetch method failed:", error)
+
+    // Fallback to canvas method
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas")
+          canvas.width = img.width
+          canvas.height = img.height
+          const ctx = canvas.getContext("2d")
+          if (ctx) {
+            ctx.drawImage(img, 0, 0)
+            const dataURL = canvas.toDataURL("image/jpeg", 0.85)
+            console.log("[v0] Image loaded via canvas fallback")
+            resolve(dataURL)
+          } else {
+            reject(new Error("Failed to get canvas context"))
+          }
+        } catch (error) {
+          console.error("[v0] Canvas conversion failed:", error)
+          reject(error)
+        }
+      }
+
+      img.onerror = (error) => {
+        console.error("[v0] Image load failed completely:", url, error)
+        reject(new Error(`Failed to load image: ${url}`))
+      }
+
+      img.src = url
+    })
+  }
 }
 
 export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
@@ -40,6 +86,7 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
 
     try {
       console.log("[v0] Starting PDF generation for listing:", listing.id)
+      console.log("[v0] Listing files:", listing.files)
 
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -50,38 +97,6 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
       const pageWidth = pdf.internal.pageSize.getWidth()
       const pageHeight = pdf.internal.pageSize.getHeight()
       const margin = 40
-
-      // PAGE 1: Cover Page
-      pdf.setFillColor(30, 41, 59)
-      pdf.rect(0, 0, pageWidth, pageHeight, "F")
-
-      // Company Logo at top
-      try {
-        const logoBase64 = await loadImageAsDataURL(
-          "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTirZvs6mwvxX4xSRx9pPSYetcWbXdcuqs_o5hVVBk1e_BGdj6Q",
-        )
-        const logoWidth = 100
-        const logoHeight = 35
-        pdf.addImage(logoBase64, "PNG", (pageWidth - logoWidth) / 2, 40, logoWidth, logoHeight)
-      } catch (error) {
-        console.error("[v0] Failed to load logo:", error)
-      }
-
-      // Property Image with white border
-      if (listing.thumbnail_url) {
-        try {
-          const propBase64 = await loadImageAsDataURL(listing.thumbnail_url)
-          const imgWidth = pageWidth - 2 * margin
-          const imgHeight = 300
-          const imgY = 120
-
-          pdf.setFillColor(255, 255, 255)
-          pdf.rect(margin - 5, imgY - 5, imgWidth + 10, imgHeight + 10, "F")
-          pdf.addImage(propBase64, "JPEG", margin, imgY, imgWidth, imgHeight)
-        } catch (error) {
-          console.error("[v0] Failed to load property image:", error)
-        }
-      }
 
       const drawTriangle = (x1: number, y1: number, x2: number, y2: number, x3: number, y3: number) => {
         pdf.lines(
@@ -97,12 +112,43 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
         )
       }
 
+      // PAGE 1: Cover Page
+      pdf.setFillColor(30, 41, 59)
+      pdf.rect(0, 0, pageWidth, pageHeight, "F")
+
+      try {
+        const logoBase64 = await loadImageViaFetch(
+          "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTirZvs6mwvxX4xSRx9pPSYetcWbXdcuqs_o5hVVBk1e_BGdj6Q",
+        )
+        const logoWidth = 120
+        const logoHeight = 40
+        pdf.addImage(logoBase64, "PNG", (pageWidth - logoWidth) / 2, 40, logoWidth, logoHeight)
+      } catch (error) {
+        console.error("[v0] Failed to load logo:", error)
+      }
+
+      // Property Image with white border
+      if (listing.thumbnail_url) {
+        try {
+          const propBase64 = await loadImageViaFetch(listing.thumbnail_url)
+          const imgWidth = pageWidth - 2 * margin
+          const imgHeight = 300
+          const imgY = 120
+
+          pdf.setFillColor(255, 255, 255)
+          pdf.rect(margin - 5, imgY - 5, imgWidth + 10, imgHeight + 10, "F")
+          pdf.addImage(propBase64, "JPEG", margin, imgY, imgWidth, imgHeight)
+        } catch (error) {
+          console.error("[v0] Failed to load property image:", error)
+        }
+      }
+
+      // Diagonal triangle design
       pdf.setFillColor(248, 250, 252)
       const triangleY = 440
       drawTriangle(0, triangleY, pageWidth, triangleY, pageWidth, pageHeight)
 
-      // FOR SALE/LEASE text
-      pdf.setTextColor(30, 41, 59) // Dark text color for visibility
+      pdf.setTextColor(30, 41, 59)
       pdf.setFontSize(48)
       pdf.setFont("helvetica", "bold")
       const listingTypeText =
@@ -113,8 +159,7 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
             : "FOR SALE OR LEASE"
       pdf.text(listingTypeText, pageWidth / 2, 500, { align: "center" })
 
-      // Property details
-      pdf.setTextColor(51, 65, 85) // Darker text
+      pdf.setTextColor(51, 65, 85)
       pdf.setFontSize(16)
       pdf.setFont("helvetica", "normal")
       const detailsLine1 = `${listing.building_sf ? listing.building_sf.toLocaleString() + " SF" : ""} ${listing.categories?.name || ""}`
@@ -149,6 +194,7 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
       pdf.rect(trafficX, boxY, boxWidth, boxHeight, "F")
       pdf.setTextColor(71, 85, 105)
       pdf.setFontSize(10)
+      pdf.setFont("helvetica", "bold")
       pdf.text("TRAFFIC COUNT", trafficX + boxWidth / 2, boxY + 20, { align: "center" })
       pdf.setTextColor(15, 23, 42)
       pdf.setFontSize(18)
@@ -161,6 +207,7 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
       pdf.rect(priceX, boxY, boxWidth, boxHeight, "F")
       pdf.setTextColor(71, 85, 105)
       pdf.setFontSize(10)
+      pdf.setFont("helvetica", "bold")
       pdf.text("PRICING", priceX + boxWidth / 2, boxY + 20, { align: "center" })
       pdf.setTextColor(15, 23, 42)
       pdf.setFontSize(18)
@@ -204,6 +251,7 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
       pdf.rect(stats2X, statsY, statsBoxW, statsBoxH, "F")
       pdf.setTextColor(71, 85, 105)
       pdf.setFontSize(10)
+      pdf.setFont("helvetica", "bold")
       pdf.text("TRAFFIC COUNT", stats2X + statsBoxW / 2, statsY + 25, { align: "center" })
       pdf.setTextColor(15, 23, 42)
       pdf.setFontSize(20)
@@ -215,6 +263,7 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
       pdf.rect(stats3X, statsY, statsBoxW, statsBoxH, "F")
       pdf.setTextColor(71, 85, 105)
       pdf.setFontSize(10)
+      pdf.setFont("helvetica", "bold")
       pdf.text("PRICING", stats3X + statsBoxW / 2, statsY + 25, { align: "center" })
       pdf.setTextColor(15, 23, 42)
       pdf.setFontSize(20)
@@ -307,12 +356,13 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
         yPos += 25
       })
 
+      // Diagonal triangle design
       pdf.setFillColor(0, 0, 0)
       const diagY = 320
       drawTriangle(0, diagY, pageWidth, diagY - 80, pageWidth, pageHeight)
 
       try {
-        const samuelBase64 = await loadImageAsDataURL("/images/samuel-scarborough.jpg")
+        const samuelBase64 = await loadImageViaFetch("/images/samuel-scarborough.jpg")
         const samImgW = 150
         const samImgH = 180
         const samImgX = margin + 40
@@ -343,43 +393,52 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
       pdf.text("www.scarboroughcre.com", contactX, contactY + 86)
 
       console.log("[v0] Checking listing files:", listing.files)
-      const imageFiles = (listing.files || []).filter((f: any) => {
-        const isImage = f.file_type?.startsWith("image/") || f.file_url?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-        console.log("[v0] File:", f.file_url, "Is image:", isImage)
-        return f.file_url && isImage
+      console.log("[v0] Total files count:", listing.files?.length || 0)
+
+      console.log("[v0] Fetching property images from server...")
+      const { images: propertyImages, error: imagesError } = await getListingImagesForPDF(listing.id)
+
+      if (imagesError) {
+        console.error("[v0] Error fetching property images:", imagesError)
+      }
+
+      console.log(`[v0] Property images result:`, {
+        count: propertyImages?.length || 0,
+        hasImages: !!propertyImages && propertyImages.length > 0,
+        error: imagesError,
       })
 
-      console.log("[v0] Found property images:", imageFiles.length)
+      // PAGE 4: Property Images
+      pdf.addPage()
+      pdf.setFillColor(0, 0, 0)
+      pdf.rect(0, 0, pageWidth, pageHeight, "F")
 
-      if (imageFiles.length > 0) {
-        // PAGE 4: Property Images
-        pdf.addPage()
-        pdf.setFillColor(0, 0, 0)
-        pdf.rect(0, 0, pageWidth, pageHeight, "F")
+      // Header
+      pdf.setTextColor(255, 255, 255)
+      pdf.setFontSize(28)
+      pdf.setFont("helvetica", "bold")
+      pdf.text("PROPERTY IMAGES", pageWidth / 2, 70, { align: "center" })
 
-        // Header
-        pdf.setTextColor(255, 255, 255)
-        pdf.setFontSize(28)
-        pdf.setFont("helvetica", "bold")
-        pdf.text("PROPERTY IMAGES", pageWidth / 2, 70, { align: "center" })
-
+      if (propertyImages && propertyImages.length > 0) {
         let currentY = 120
 
-        if (imageFiles.length > 0) {
+        // First image full width (hero image)
+        const firstImg = propertyImages[0]
+        if (firstImg && firstImg.dataUrl) {
           try {
-            console.log("[v0] Loading first image:", imageFiles[0].file_url)
-            const firstImgBase64 = await loadImageAsDataURL(imageFiles[0].file_url)
+            console.log("[v0] Adding hero image to PDF")
             const firstImgWidth = pageWidth - 2 * margin
             const firstImgHeight = 240
 
-            pdf.addImage(firstImgBase64, "JPEG", margin, currentY, firstImgWidth, firstImgHeight)
-            console.log("[v0] First image added")
+            pdf.addImage(firstImg.dataUrl, "JPEG", margin, currentY, firstImgWidth, firstImgHeight)
+            console.log("[v0] Hero image added successfully")
             currentY += firstImgHeight + 25
           } catch (error) {
-            console.error("[v0] Failed to load first image:", error)
+            console.error("[v0] Failed to add hero image:", error)
           }
         }
 
+        // Remaining images in 2-column grid
         const gridImgWidth = (pageWidth - 3 * margin) / 2
         const gridImgHeight = 150
         const imgSpacing = 20
@@ -388,14 +447,17 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
         let imgIndex = 1
         let imagesInRow = 0
 
-        while (imgIndex < imageFiles.length && currentY + gridImgHeight < pageHeight - margin) {
-          try {
-            console.log(`[v0] Loading image ${imgIndex + 1}:`, imageFiles[imgIndex].file_url)
-            const imgBase64 = await loadImageAsDataURL(imageFiles[imgIndex].file_url)
-            pdf.addImage(imgBase64, "JPEG", imgX, currentY, gridImgWidth, gridImgHeight)
-            console.log(`[v0] Image ${imgIndex + 1} added`)
-          } catch (error) {
-            console.error(`[v0] Failed to load image ${imgIndex + 1}:`, error)
+        // Add remaining images on first page
+        while (imgIndex < propertyImages.length && currentY + gridImgHeight < pageHeight - margin) {
+          const currentImage = propertyImages[imgIndex]
+          if (currentImage && currentImage.dataUrl) {
+            try {
+              console.log(`[v0] Adding grid image ${imgIndex + 1} to PDF`)
+              pdf.addImage(currentImage.dataUrl, "JPEG", imgX, currentY, gridImgWidth, gridImgHeight)
+              console.log(`[v0] Grid image ${imgIndex + 1} added successfully`)
+            } catch (error) {
+              console.error(`[v0] Failed to add grid image ${imgIndex + 1}:`, error)
+            }
           }
 
           imgIndex++
@@ -410,8 +472,8 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
           }
         }
 
-        // Continue on additional pages if needed
-        while (imgIndex < imageFiles.length) {
+        // Add additional pages if needed for remaining images
+        while (imgIndex < propertyImages.length) {
           pdf.addPage()
           pdf.setFillColor(0, 0, 0)
           pdf.rect(0, 0, pageWidth, pageHeight, "F")
@@ -420,12 +482,16 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
           imgX = margin
           imagesInRow = 0
 
-          while (imgIndex < imageFiles.length && currentY + gridImgHeight < pageHeight - margin) {
-            try {
-              const imgBase64 = await loadImageAsDataURL(imageFiles[imgIndex].file_url)
-              pdf.addImage(imgBase64, "JPEG", imgX, currentY, gridImgWidth, gridImgHeight)
-            } catch (error) {
-              console.error(`[v0] Failed to load image ${imgIndex + 1}:`, error)
+          while (imgIndex < propertyImages.length && currentY + gridImgHeight < pageHeight - margin) {
+            const currentImage = propertyImages[imgIndex]
+            if (currentImage && currentImage.dataUrl) {
+              try {
+                console.log(`[v0] Adding image ${imgIndex + 1} on new page`)
+                pdf.addImage(currentImage.dataUrl, "JPEG", imgX, currentY, gridImgWidth, gridImgHeight)
+                console.log(`[v0] Image ${imgIndex + 1} added on new page`)
+              } catch (error) {
+                console.error(`[v0] Failed to add image ${imgIndex + 1}:`, error)
+              }
             }
 
             imgIndex++
@@ -440,19 +506,25 @@ export function OMMemorandumGenerator({ listing }: OMGeneratorProps) {
             }
           }
         }
+
+        console.log("[v0] Property images page completed with all images")
       } else {
-        console.log("[v0] No property images found")
+        pdf.setTextColor(255, 255, 255)
+        pdf.setFontSize(14)
+        pdf.setFont("helvetica", "normal")
+        pdf.text("No property images available for this listing.", pageWidth / 2, 150, { align: "center" })
+        console.log("[v0] No property images to add to PDF - showing placeholder message")
       }
 
       // Save PDF
       const fileName = `OM_${listing.address.replace(/[^a-z0-9]/gi, "_")}.pdf`
       pdf.save(fileName)
-      console.log("[v0] PDF saved:", fileName)
+      console.log("[v0] PDF saved successfully:", fileName)
 
       setOpen(false)
     } catch (error) {
       console.error("[v0] Error generating PDF:", error)
-      alert("Failed to generate PDF. Please try again.")
+      alert("Failed to generate PDF. Please check console for details.")
     } finally {
       setGenerating(false)
     }

@@ -3,7 +3,7 @@
     "40631a7a2da5a6d0110c70aad333658761bf9170b9": {
       "workers": {
         "app/dashboard/agent/listings/[id]/page": {
-          "moduleId": "[project]/.next-internal/server/app/dashboard/agent/listings/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/actions/get-listing.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "moduleId": "[project]/.next-internal/server/app/dashboard/agent/listings/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/actions/get-listing.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/app/actions/get-listing-images-for-pdf.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
           "async": false,
           "exportedName": "getListingById",
           "filename": "app/actions/get-listing.ts"
@@ -14,6 +14,21 @@
       },
       "exportedName": "getListingById",
       "filename": "app/actions/get-listing.ts"
+    },
+    "405fc07696b50b58fc5229d9a77cb2dd8551fe0c39": {
+      "workers": {
+        "app/dashboard/agent/listings/[id]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/agent/listings/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/actions/get-listing.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/app/actions/get-listing-images-for-pdf.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "getListingImagesForPDF",
+          "filename": "app/actions/get-listing-images-for-pdf.ts"
+        }
+      },
+      "layer": {
+        "app/dashboard/agent/listings/[id]/page": "action-browser"
+      },
+      "exportedName": "getListingImagesForPDF",
+      "filename": "app/actions/get-listing-images-for-pdf.ts"
     }
   },
   "edge": {}
