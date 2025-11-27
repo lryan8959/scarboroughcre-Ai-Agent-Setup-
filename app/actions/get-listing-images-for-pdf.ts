@@ -10,6 +10,7 @@ export async function getListingImagesForPDF(listingId: string) {
       .from("listing_files")
       .select("*")
       .eq("listing_id", listingId)
+      .eq("folder_name", "Photos")
       .order("uploaded_at")
 
     if (filesError) {
@@ -18,20 +19,15 @@ export async function getListingImagesForPDF(listingId: string) {
     }
 
     if (!files || files.length === 0) {
-      console.log("[v0] No files found for listing")
+      console.log("[v0] No photo files found for listing")
       return { images: [], error: null }
     }
 
-    const imageFiles = files.filter((file) => {
-      const isImage = file.file_type?.startsWith("image/") || file.file_url?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-      return isImage && file.file_url
-    })
+    console.log(`[v0] Found ${files.length} photo files for listing ${listingId}`)
 
-    console.log(`[v0] Found ${imageFiles.length} image files for listing ${listingId}`)
-
-    const imagePromises = imageFiles.map(async (file) => {
+    const imagePromises = files.map(async (file) => {
       try {
-        console.log(`[v0] Fetching image: ${file.file_url}`)
+        console.log(`[v0] Fetching image: ${file.file_name} from ${file.file_url}`)
         const response = await fetch(file.file_url)
 
         if (!response.ok) {

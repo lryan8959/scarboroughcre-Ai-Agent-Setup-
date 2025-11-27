@@ -278,18 +278,41 @@ export default function CreateListingPage() {
     for (const folder in files) {
       const folderFiles = files[folder]
       for (const file of folderFiles) {
-        const saveResult = await saveListingFile({
-          listing_id: listingId,
-          file_name: file.name,
-          file_type: file.type,
-          file_url: URL.createObjectURL(file),
-          file_path: file.name,
-          file_size: file.size,
-          folder_name: folder,
-        })
+        try {
+          // Upload file to Vercel Blob Storage
+          const formData = new FormData()
+          formData.append("file", file)
+          formData.append("listingId", listingId)
+          formData.append("folder", folder)
 
-        if (saveResult.error) {
-          console.error("[v0] File save error:", saveResult.error)
+          const uploadResponse = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          })
+
+          if (!uploadResponse.ok) {
+            console.error("[v0] Upload failed:", await uploadResponse.text())
+            continue
+          }
+
+          const uploadData = await uploadResponse.json()
+
+          // Save file metadata with actual Vercel Blob Storage URL
+          const saveResult = await saveListingFile({
+            listing_id: listingId,
+            file_name: file.name,
+            file_type: file.type,
+            file_url: uploadData.url, // Use the actual Vercel Blob Storage URL
+            file_path: file.name,
+            file_size: file.size,
+            folder_name: folder,
+          })
+
+          if (saveResult.error) {
+            console.error("[v0] File save error:", saveResult.error)
+          }
+        } catch (error) {
+          console.error("[v0] Error uploading file:", error)
         }
       }
     }

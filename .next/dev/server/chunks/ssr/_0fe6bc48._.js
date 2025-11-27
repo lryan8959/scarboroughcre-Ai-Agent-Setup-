@@ -110,7 +110,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 async function getListingImagesForPDF(listingId) {
     try {
         const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getSupabaseServiceClient"])();
-        const { data: files, error: filesError } = await supabase.from("listing_files").select("*").eq("listing_id", listingId).order("uploaded_at");
+        const { data: files, error: filesError } = await supabase.from("listing_files").select("*").eq("listing_id", listingId).eq("folder_name", "Photos").order("uploaded_at");
         if (filesError) {
             console.error("[v0] Error fetching files:", filesError);
             return {
@@ -119,20 +119,16 @@ async function getListingImagesForPDF(listingId) {
             };
         }
         if (!files || files.length === 0) {
-            console.log("[v0] No files found for listing");
+            console.log("[v0] No photo files found for listing");
             return {
                 images: [],
                 error: null
             };
         }
-        const imageFiles = files.filter((file)=>{
-            const isImage = file.file_type?.startsWith("image/") || file.file_url?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-            return isImage && file.file_url;
-        });
-        console.log(`[v0] Found ${imageFiles.length} image files for listing ${listingId}`);
-        const imagePromises = imageFiles.map(async (file)=>{
+        console.log(`[v0] Found ${files.length} photo files for listing ${listingId}`);
+        const imagePromises = files.map(async (file)=>{
             try {
-                console.log(`[v0] Fetching image: ${file.file_url}`);
+                console.log(`[v0] Fetching image: ${file.file_name} from ${file.file_url}`);
                 const response = await fetch(file.file_url);
                 if (!response.ok) {
                     console.error(`[v0] Failed to fetch image: ${response.status}`);

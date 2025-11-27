@@ -1,6 +1,7 @@
 {
   "/api/auth/login/route": "app/api/auth/login/route.js",
   "/api/listings/route": "app/api/listings/route.js",
+  "/api/upload/route": "app/api/upload/route.js",
   "/dashboard/agent/create-listing/page": "app/dashboard/agent/create-listing/page.js",
   "/dashboard/agent/listings/[id]/page": "app/dashboard/agent/listings/[id]/page.js",
   "/dashboard/agent/page": "app/dashboard/agent/page.js",
